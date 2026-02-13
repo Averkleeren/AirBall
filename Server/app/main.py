@@ -1,7 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
+from database import engine, Base
+from routes.auth import router as auth_router
+import models
+
+# Create database tables
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(
+    title="AirBall API",
+    description="Backend API for AirBall application",
+    version="1.0.0"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -10,6 +21,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(auth_router)
 
 @app.get("/health")
 def health_check():

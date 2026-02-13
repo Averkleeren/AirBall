@@ -2,3 +2,9 @@ fastapi
 uvicorn
 ollama
 pytest
+sqlalchemy
+pydantic
+python-dotenv
+passlib[bcrypt]
+python-jose[cryptography]
+pydantic-settings
