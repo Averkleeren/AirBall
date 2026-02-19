@@ -5,6 +5,10 @@ pytest
 sqlalchemy
 pydantic
 python-dotenv
-passlib[bcrypt]
 python-jose[cryptography]
 pydantic-settings
+
+# auth / hashing
+passlib==1.7.4
+bcrypt==4.2.1
+passlib[argon2]
