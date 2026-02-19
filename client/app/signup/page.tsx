@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
+import { API_ENDPOINTS, apiCall } from "@/lib/api";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -29,11 +30,8 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/auth/signup", {
+      const result = await apiCall(API_ENDPOINTS.signup, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
           username,
           email,
@@ -41,9 +39,8 @@ export default function SignupPage() {
         }),
       });
 
-      if (!response.ok) {
-        const data = await response.json();
-        setError(data.detail || "Signup failed. Please try again.");
+      if (!result.ok) {
+        setError(result.error || "Signup failed. Please try again.");
         setLoading(false);
         return;
       }

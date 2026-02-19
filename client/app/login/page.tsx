@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
+import { API_ENDPOINTS, apiCall } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,25 +20,21 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/auth/login", {
+      const result = await apiCall(API_ENDPOINTS.login, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
           email,
           password,
         }),
       });
 
-      if (!response.ok) {
-        const data = await response.json();
-        setError(data.detail || "Login failed. Please try again.");
+      if (!result.ok) {
+        setError(result.error || "Login failed. Please try again.");
         setLoading(false);
         return;
       }
 
-      const data = await response.json();
+      const data = result.data as any;
 
       // Store token in localStorage
       localStorage.setItem("access_token", data.access_token);
