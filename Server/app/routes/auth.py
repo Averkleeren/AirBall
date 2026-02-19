@@ -3,10 +3,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from datetime import timedelta
 
-from database import get_db
-from models import User
-from schemas import UserCreate, UserLogin, UserResponse, Token
-from auth import verify_password, get_password_hash, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from ..database import get_db
+from ..models import User
+from ..schemas import UserCreate, UserLogin, UserResponse, Token
+from ..auth import verify_password, get_password_hash, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 
 router = APIRouter(
     prefix="/auth",
