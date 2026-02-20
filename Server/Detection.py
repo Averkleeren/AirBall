@@ -7,6 +7,7 @@ from flask import Flask, Response
 from ultralytics import YOLO
 
 from shot_detector import ShotDetector
+from ball_detector import BallTracker, ShotResultClassifier
 from camera import picam2
 
 app = Flask(__name__)
@@ -20,6 +21,7 @@ pose_detector = mp_pose.Pose(static_image_mode=True, min_detection_confidence=0.
 
 # Shot detection and camera setup moved to modules
 detector = ShotDetector()
+ball_tracker = BallTracker()
 
 
 def generate_frames():
@@ -92,11 +94,39 @@ def generate_frames():
         # For shot detection, use the first person's landmarks if any
         if people_landmarks:
             ts = time.time()
-            shot = detector.update(people_landmarks[0], frame.shape[1], frame.shape[0], ts)  # Assuming landmarks is list of tuples, but detector expects mediapipe landmarks?
+            shot = detector.update(people_landmarks[0], frame.shape[1], frame.shape[0], ts)
             if shot is not None:
-                # overlay a small notification
-                txt = f"Shot detected: {shot['id'][:8]} dur={shot['detection_window']['duration']:.2f}s"
+                # Shot detected - analyze ball trajectory and classify result
+                ball_trajectory = ball_tracker.get_trajectory()
+                result_analysis = ShotResultClassifier.analyze_trajectory(
+                    ball_trajectory, frame.shape[0], frame.shape[1]
+                )
+                
+                # Add ball data to shot
+                shot['ball_tracking'] = {
+                    'trajectory': ball_trajectory,
+                    'result': result_analysis['result'],
+                    'confidence': result_analysis['confidence'],
+                    'analysis': result_analysis['analysis'],
+                }
+                
+                # Overlay notification with result
+                txt = f"Shot detected: {shot['id'][:8]} dur={shot['detection_window']['duration']:.2f}s | Result: {result_analysis['result'].upper()}"
                 cv2.putText(frame, txt, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                
+                # Clear ball tracker after shot
+                ball_tracker.clear()
+        
+        # Track ball in every frame
+        ball_info = ball_tracker.update(frame, time.time())
+        
+        # Draw ball detection on frame
+        if ball_info['current_pos']:
+            x, y = ball_info['current_pos']
+            cv2.circle(frame, (x, y), 8, (0, 0, 255), 2)
+            if ball_info['trajectory_length'] > 1:
+                cv2.putText(frame, f"Ball: {ball_info['trajectory_length']} frames", (10, 60),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
         # Web Stream
         ret, buffer = cv2.imencode('.jpg', frame)

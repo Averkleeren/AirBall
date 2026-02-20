@@ -12,3 +12,9 @@ pydantic-settings
 passlib==1.7.4
 bcrypt==4.2.1
 passlib[argon2]
+
+# computer vision & ML
+ultralytics>=8.0.0
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+numpy>=1.24.0

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class UserBase(BaseModel):
@@ -28,3 +28,46 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+
+
+class ShotResponse(BaseModel):
+    id: int
+    shot_id: str
+    shot_result: Optional[str]
+    result_confidence: float
+    ball_trajectory_length: int
+    ball_analysis: Optional[str]
+    start_ts: float
+    end_ts: float
+    duration: float
+    feedback: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class VideoResponse(BaseModel):
+    id: int
+    video_id: str
+    filename: str
+    status: str
+    total_frames: Optional[int]
+    fps: Optional[float]
+    duration_seconds: Optional[float]
+    shots_detected: int
+    created_at: datetime
+    processed_at: Optional[datetime]
+    shots: List[ShotResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+class VideoSummary(BaseModel):
+    video_id: str
+    status: str
+    shots_detected: int
+    duration_seconds: Optional[float]
+    fps: Optional[float]
+
