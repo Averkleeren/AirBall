@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .database import engine, Base
 from .routes.auth import router as auth_router
+from .routes.videos import router as videos_router
 from . import models
 
 # Create database tables
@@ -24,6 +25,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(videos_router)
 
 @app.get("/health")
 def health_check():
