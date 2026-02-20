@@ -21,6 +21,10 @@ pose_detector = mp_pose.Pose(static_image_mode=True, min_detection_confidence=0.
 # Shot detection and camera setup moved to modules
 detector = ShotDetector()
 
+def run_detection(video_path):
+    # Placeholder: Replace with your actual detection logic
+    # For example, process video and return results as dict
+    return {"message": "Detection complete", "video_path": video_path}
 
 def generate_frames():
     while True:

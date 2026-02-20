@@ -5,6 +5,10 @@ from .database import engine, Base
 from .routes.auth import router as auth_router
 from . import models
 
+from app.routes import detect
+
+app.include_router(detect.router)
+
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
