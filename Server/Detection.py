@@ -3,6 +3,7 @@ import mediapipe as mp
 import numpy as np
 import os
 import time
+from collections import deque
 from flask import Flask, Response
 from ultralytics import YOLO
 
@@ -12,7 +13,11 @@ from camera import picam2
 app = Flask(__name__)
 
 # Initialize person detection with YOLO
-person_detector = YOLO('yolov8n.pt')  # Load YOLOv8 nano model
+person_detector = YOLO('yolov8n.pt')  
+
+# Buffers to store recent ball and wrist positions for verification
+ball_buffer = deque(maxlen=180)
+wrist_buffer = deque(maxlen=180)
 
 # Initialize body detection
 mp_pose = mp.solutions.pose
@@ -25,6 +30,7 @@ detector = ShotDetector()
 def generate_frames():
     while True:
         raw_frame = picam2.capture_array()
+        ts = time.time()
         frame = cv2.cvtColor(raw_frame, cv2.COLOR_RGBA2BGR)
         # Resize for speed
         scale = 0.25
@@ -33,7 +39,30 @@ def generate_frames():
         rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
         # Person detection with YOLO
-        results = person_detector(rgb_small_frame, conf=0.3, classes=[0])  # class 0 is person
+        results = person_detector(rgb_small_frame, conf=0.3, classes=[0])  
+        # Ball detection 
+        ball_results = person_detector(rgb_small_frame, conf=0.3, classes=[32])
+
+        # extract first detected ball
+        ball_center_full = None
+        for bres in ball_results:
+            for box in bres.boxes:
+                x1b, y1b, x2b, y2b = box.xyxy[0].cpu().numpy()
+                x1b, y1b, x2b, y2b = int(x1b), int(y1b), int(x2b), int(y2b)
+                # center in small frame
+                cx = int((x1b + x2b) / 2)
+                cy = int((y1b + y2b) / 2)
+                # convert to full frame coords
+                full_cx = int(cx / scale * frame.shape[1])
+                full_cy = int(cy / scale * frame.shape[0])
+                ball_center_full = (full_cx, full_cy)
+                ball_buffer.append({'ts': ts, 'pos': ball_center_full})
+                # draw ball detection
+                cv2.rectangle(frame, (int(x1b/scale), int(y1b/scale)), (int(x2b/scale), int(y2b/scale)), (0, 0, 255), 2)
+                cv2.putText(frame, "Ball", (int(x1b/scale), int(y1b/scale) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                break
+            if ball_center_full is not None:
+                break
 
         people_landmarks = []
         processed = False
@@ -69,7 +98,23 @@ def generate_frames():
                         y = int(lm.y * frame.shape[0])
                         coords.append((x, y))
 
-                    people_landmarks.append(landmarks)  # Store adjusted landmarks
+                    people_landmarks.append(landmarks)  
+
+                    # store wrist position in full-frame coords for verification
+                    # choose wrist by visibility if available
+                    try:
+                        rw_idx = mp_pose.PoseLandmark.RIGHT_WRIST.value
+                        lw_idx = mp_pose.PoseLandmark.LEFT_WRIST.value
+                        # pick the wrist with higher visibility if available
+                        vis_r = landmarks[rw_idx].visibility if hasattr(landmarks[rw_idx], 'visibility') else 0.0
+                        vis_l = landmarks[lw_idx].visibility if hasattr(landmarks[lw_idx], 'visibility') else 0.0
+                        wrist_idx = rw_idx if vis_r >= vis_l else lw_idx
+                    except Exception:
+                        wrist_idx = mp_pose.PoseLandmark.RIGHT_WRIST.value
+                    # compute wrist full-frame coord
+                    wlm = landmarks[wrist_idx]
+                    wrist_full = (int(wlm.x * frame.shape[1]), int(wlm.y * frame.shape[0]))
+                    wrist_buffer.append({'ts': ts, 'pos': wrist_full})
 
                     # Draw bounding box
                     cv2.rectangle(frame, (int(x1/scale), int(y1/scale)), (int(x2/scale), int(y2/scale)), (0, 255, 0), 2)
@@ -91,12 +136,43 @@ def generate_frames():
 
         # For shot detection, use the first person's landmarks if any
         if people_landmarks:
-            ts = time.time()
-            shot = detector.update(people_landmarks[0], frame.shape[1], frame.shape[0], ts)  # Assuming landmarks is list of tuples, but detector expects mediapipe landmarks?
+            # use current ts (captured near frame read)
+            shot = detector.update(people_landmarks[0], frame.shape[1], frame.shape[0], ts)
             if shot is not None:
-                # overlay a small notification
-                txt = f"Shot detected: {shot['id'][:8]} dur={shot['detection_window']['duration']:.2f}s"
-                cv2.putText(frame, txt, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                # verify shot by checking that the ball leaves the hand after the release timestamp
+                try:
+                    release_ts = float(shot['phases']['release']['ts'])
+                except Exception:
+                    release_ts = shot.get('detection_window', {}).get('end', ts)
+
+                # find wrist position nearest to release
+                wrist_at_release = None
+                if wrist_buffer:
+                    wrist_at_release = min(wrist_buffer, key=lambda e: abs(e['ts'] - release_ts))
+
+                # find ball positions after release (+ small epsilon)
+                ball_after = [e for e in list(ball_buffer) if e['ts'] > release_ts + 0.01]
+
+                accepted = False
+                if wrist_at_release and ball_after:
+                    threshold_px = max(40, int(frame.shape[1] * 0.03))
+                    wrist_pos = wrist_at_release['pos']
+                    max_sep = 0.0
+                    for be in ball_after:
+                        sep = ((be['pos'][0] - wrist_pos[0])**2 + (be['pos'][1] - wrist_pos[1])**2)**0.5
+                        if sep > max_sep:
+                            max_sep = sep
+                        if be['ts'] - release_ts > 0.5:
+                            break
+                    if max_sep > threshold_px:
+                        accepted = True
+
+                if accepted:
+                    txt = f"Shot detected: {shot['id'][:8]} dur={shot['detection_window']['duration']:.2f}s"
+                    cv2.putText(frame, txt, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                else:
+                    txt = f"Shot ignored (no ball separation)"
+                    cv2.putText(frame, txt, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 100, 100), 2)
 
         # Web Stream
         ret, buffer = cv2.imencode('.jpg', frame)
