@@ -71,3 +71,34 @@ class VideoSummary(BaseModel):
     duration_seconds: Optional[float]
     fps: Optional[float]
 
+
+class UserStatistics(BaseModel):
+    total_videos: int
+    total_shots: int
+    makes: int
+    misses: int
+    shooting_percentage: float
+    total_practice_time: float  # in seconds
+    average_shots_per_session: float
+    best_session_percentage: float
+    recent_trend: str  # "improving", "declining", "stable"
+    
+    class Config:
+        from_attributes = True
+
+
+class VideoHistory(BaseModel):
+    id: int
+    video_id: str
+    filename: str
+    created_at: datetime
+    processed_at: Optional[datetime]
+    shots_detected: int
+    makes: int
+    misses: int
+    shooting_percentage: float
+    duration_seconds: Optional[float]
+    
+    class Config:
+        from_attributes = True
+

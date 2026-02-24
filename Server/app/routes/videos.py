@@ -1,14 +1,16 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Depends, Header
 from pathlib import Path
 from sqlalchemy.orm import Session
 import shutil
 import uuid
 import json
 from datetime import datetime
+from typing import Optional
 
 from ..database import get_db
-from ..models import Video, Shot
+from ..models import Video, Shot, User
 from ..schemas import VideoResponse, ShotResponse
+from ..auth import decode_token
 
 router = APIRouter(
     prefix="/videos",
@@ -70,10 +72,21 @@ async def process_video_in_background(
 async def upload_video(
     file: UploadFile = File(...), 
     background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
 ):
     if not file.content_type or not file.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="Only video files are supported.")
+
+    # Try to get user from token if provided
+    user_id = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.replace("Bearer ", "")
+        token_data = decode_token(token)
+        if token_data:
+            user = db.query(User).filter(User.email == token_data["email"]).first()
+            if user:
+                user_id = user.id
 
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     SHOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -88,7 +101,7 @@ async def upload_video(
 
     db_video = Video(
         video_id=video_id,
-        user_id=None,
+        user_id=user_id,  # Will be None if user not authenticated
         filename=filename,
         file_path=str(destination),
         status="processing",
