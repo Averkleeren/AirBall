@@ -7,17 +7,17 @@ from . import models
 
 from app.routes import detect
 
-app.include_router(detect.router)
-
-# Create database tables
-Base.metadata.create_all(bind=engine)
-
+# instantiate the application before we start registering routers
 app = FastAPI(
     title="AirBall API",
     description="Backend API for AirBall application",
     version="1.0.0"
 )
 
+# Create database tables
+Base.metadata.create_all(bind=engine)
+
+# add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],  # Next.js dev server
@@ -27,6 +27,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(detect.router)
 app.include_router(auth_router)
 
 @app.get("/health")
