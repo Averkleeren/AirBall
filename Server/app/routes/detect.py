@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 import shutil
 import os
 from Server.Detection import run_detection  # Adjust import if needed
+from Server.llm_test import generate_feedback
 
 router = APIRouter()
 
@@ -16,6 +17,11 @@ async def detect_video(video: UploadFile = File(...)):
         shutil.copyfileobj(video.file, buffer)
     try:
         result = run_detection(video_path)  # Your detection function
-        return JSONResponse(content=result)
+        feedback = None
+        try:
+            feedback = generate_feedback(result)
+        except Exception as fb_err:
+            feedback = f"feedback generation failed: {fb_err}"
+        return JSONResponse(content={"analysis": result, "feedback": feedback})
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
