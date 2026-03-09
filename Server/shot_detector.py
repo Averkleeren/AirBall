@@ -83,7 +83,7 @@ class ShotDetector:
         except Exception:
             return 'right'
 
-    def update(self, lm_list, frame_w, frame_h, ts):
+    def update(self, lm_list, frame_w, frame_h, ts, ball_state=None):
         # store normalized landmark list + pixel positions + timestamp
         entry = {'lm': lm_list, 'ts': ts}
         # compute pixel positions for convenience
@@ -91,6 +91,7 @@ class ShotDetector:
         for lm in lm_list:
             pix.append((float(lm.x) * frame_w, float(lm.y) * frame_h, float(lm.z), float(getattr(lm, 'visibility', 0.0))))
         entry['pix'] = pix
+        entry['ball'] = ball_state if isinstance(ball_state, dict) else None
         # compute normalization scale per-frame for robustness
         entry['scale'] = self._compute_scale(pix)
         self.buf.append(entry)
@@ -361,9 +362,31 @@ class ShotDetector:
         else:
             confidence = 'low'
 
+        ball_states = [f.get('ball') for f in frames]
+        ball_supported = any(isinstance(state, dict) for state in ball_states)
+        supported_ball_states = [state for state in ball_states if isinstance(state, dict)]
+        ball_presence_ratio = 0.0
+        if supported_ball_states:
+            detected_count = sum(1 for state in supported_ball_states if bool(state.get('detected')))
+            ball_presence_ratio = float(detected_count / len(supported_ball_states))
+
+        in_hand_scores = [float(state.get('in_hand_score')) for state in supported_ball_states if state.get('in_hand_score') is not None]
+        ball_in_hand_score = float(np.mean(in_hand_scores)) if in_hand_scores else None
+
+        palm_gap_vals = [float(state.get('palm_gap_px')) for state in supported_ball_states if state.get('palm_gap_px') is not None]
+        palm_gap_px_mean = float(np.mean(palm_gap_vals)) if palm_gap_vals else None
+        palm_gap_px_std = float(np.std(palm_gap_vals)) if len(palm_gap_vals) > 1 else (0.0 if len(palm_gap_vals) == 1 else None)
+
+        ball_in_hand_confirmed = ball_in_hand_score is not None and ball_in_hand_score >= 0.6 and ball_presence_ratio >= 0.5
+        grip_feedback_eligible = ball_in_hand_confirmed and palm_gap_px_mean is not None
+
         conservative_feedback = confidence == 'low' or lower_vis_ratio < 0.45
         if conservative_feedback:
             feedback_message = 'Tracking confidence is limited due to partial body visibility. Keep all major joints in frame (especially hips, knees, and ankles) for more accurate coaching feedback.'
+        elif not ball_supported:
+            feedback_message = 'Ball context is not available in this run, so grip and palm-gap feedback is disabled to avoid inaccurate advice.'
+        elif not ball_in_hand_confirmed:
+            feedback_message = 'Ball-in-hand evidence is weak for this shot. Grip-specific feedback is disabled to avoid overconfident conclusions.'
         else:
             feedback_message = 'Tracking confidence is sufficient for detailed shot-form feedback.'
 
@@ -432,9 +455,19 @@ class ShotDetector:
                     'knee_often_missing': knee_vis_ratio < 0.6
                 }
             },
+            'ball_context': {
+                'supported': ball_supported,
+                'ball_presence_ratio': ball_presence_ratio,
+                'ball_in_hand_score': self._safe_float(ball_in_hand_score),
+                'ball_in_hand_confirmed': ball_in_hand_confirmed,
+                'palm_gap_px_mean': self._safe_float(palm_gap_px_mean),
+                'palm_gap_px_std': self._safe_float(palm_gap_px_std),
+                'grip_feedback_eligible': grip_feedback_eligible
+            },
             'feedback_guardrails': {
                 'mode': 'conservative' if conservative_feedback else 'normal',
-                'message': feedback_message
+                'message': feedback_message,
+                'allow_grip_feedback': grip_feedback_eligible
             },
             'frame_count': len(frames)
         }
