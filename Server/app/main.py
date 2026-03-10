@@ -5,9 +5,7 @@ from .database import engine, Base
 from .routes.auth import router as auth_router
 from .routes.videos import router as videos_router
 from .routes.statistics import router as statistics_router
-from . import models
 
-# Create database tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(

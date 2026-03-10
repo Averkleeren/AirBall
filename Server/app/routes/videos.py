@@ -4,18 +4,14 @@ from sqlalchemy.orm import Session
 import shutil
 import uuid
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from ..database import get_db
 from ..models import Video, Shot, User
-from ..schemas import VideoResponse, ShotResponse
-from ..auth import decode_token
+from ..auth import decode_token, extract_token_from_header
 
-router = APIRouter(
-    prefix="/videos",
-    tags=["videos"],
-)
+router = APIRouter(prefix="/videos", tags=["videos"])
 
 UPLOAD_DIR = Path("uploads")
 SHOTS_DIR = Path("shots")
@@ -41,7 +37,7 @@ async def process_video_in_background(
             db_video.fps = result['fps']
             db_video.duration_seconds = result['duration_seconds']
             db_video.shots_detected = result['shots_detected']
-            db_video.processed_at = datetime.utcnow()
+            db_video.processed_at = datetime.now(timezone.utc)
             
             for shot_data in result['shots']:
                 shot = Shot(
@@ -80,8 +76,8 @@ async def upload_video(
 
     # Try to get user from token if provided
     user_id = None
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.replace("Bearer ", "")
+    token = extract_token_from_header(authorization)
+    if token:
         token_data = decode_token(token)
         if token_data:
             user = db.query(User).filter(User.email == token_data["email"]).first()
