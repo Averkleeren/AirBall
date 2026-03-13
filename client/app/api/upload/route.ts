@@ -56,6 +56,36 @@ export async function POST(request: Request) {
       data: { publicUrl },
     } = supabase.storage.from("videos").getPublicUrl(fileName)
 
+     // Simulate AI analysis with random but realistic stats
+    const shotScore = Math.floor(Math.random() * 40) + 60
+    const arcAngle = parseFloat((Math.random() * 15 + 38).toFixed(1))
+    const releaseSpeed = parseFloat((Math.random() * 5 + 18).toFixed(1))
+    const followThroughScore = Math.floor(Math.random() * 30) + 70
+
+    const { data: video, error: dbError } = await supabase
+      .from("videos")
+      .insert({
+        user_id: user.id,
+        file_name: file.name,
+        file_url: publicUrl,
+        status: "analyzed",
+        shot_score: shotScore,
+        arc_angle: arcAngle,
+        release_speed: releaseSpeed,
+        follow_through_score: followThroughScore,
+      })
+      .select()
+      .single()
+
+    if (dbError) {
+      return NextResponse.json(
+        { error: "Failed to save video data" },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ video })
+    
   } catch {
     return NextResponse.json(
       { error: "Something went wrong" },
