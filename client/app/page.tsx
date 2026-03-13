@@ -13,6 +13,7 @@ export default function LandingPage() {
       <FeaturesSection />
       <StepsSection />
       <CTASection />
+      <LandingFooter />
     </main>
   )
 }
