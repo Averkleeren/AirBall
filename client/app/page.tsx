@@ -10,6 +10,7 @@ export default function LandingPage() {
     <main className="min-h-screen bg-background">
       <LandingNav />
       <HeroSection />
+      <FeaturesSection />
     </main>
   )
 }
