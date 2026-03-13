@@ -26,6 +26,36 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
+
+    const maxSize = 100 * 1024 * 1024 // 100MB
+    if (file.size > maxSize) {
+      return NextResponse.json(
+        { error: "File too large. Maximum size is 100MB." },
+        { status: 400 }
+      )
+    }
+
+    const fileExt = file.name.split(".").pop()
+    const fileName = `${user.id}/${Date.now()}.${fileExt}`
+
+    const { error: uploadError } = await supabase.storage
+      .from("videos")
+      .upload(fileName, file, {
+        cacheControl: "3600",
+        upsert: false,
+      })
+
+    if (uploadError) {
+      return NextResponse.json(
+        { error: "Failed to upload video" },
+        { status: 500 }
+      )
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("videos").getPublicUrl(fileName)
+
   } catch {
     return NextResponse.json(
       { error: "Something went wrong" },
