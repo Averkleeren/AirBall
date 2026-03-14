@@ -4,6 +4,7 @@ import numpy as np
 import os
 import time
 from collections import deque
+from datetime import datetime
 from flask import Flask, Response
 from ultralytics import YOLO
 
@@ -26,8 +27,54 @@ pose_detector = mp_pose.Pose(static_image_mode=True, min_detection_confidence=0.
 # Shot detection and camera setup moved to modules
 detector = ShotDetector()
 
+# Shot clip + cooldown settings
+SHOT_COOLDOWN_SECONDS = 5.0
+CLIP_PRE_SECONDS = 1.5
+CLIP_POST_SECONDS = 1.5
+FRAME_BUFFER_SECONDS = 8.0
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'Shots')
+
+
+def _ensure_output_dir():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+
+def _save_clip(frames, shot_id):
+    if not frames:
+        return None
+
+    _ensure_output_dir()
+
+    first_ts = frames[0]['ts']
+    last_ts = frames[-1]['ts']
+    if len(frames) > 1 and last_ts > first_ts:
+        fps = (len(frames) - 1) / (last_ts - first_ts)
+        fps = max(10.0, min(60.0, fps))
+    else:
+        fps = 20.0
+
+    first_frame = frames[0]['frame']
+    height, width = first_frame.shape[:2]
+    stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    safe_id = (shot_id or 'unknown')[:8]
+    out_path = os.path.join(OUTPUT_DIR, f"shot_{safe_id}_{stamp}.mp4")
+
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    writer = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
+    if not writer.isOpened():
+        return None
+
+    for entry in frames:
+        writer.write(entry['frame'])
+    writer.release()
+    return out_path
+
 
 def generate_frames():
+    frame_buffer = deque()
+    pending_clip = None
+    last_accepted_shot_ts = -1e9
+
     while True:
         raw_frame = picam2.capture_array()
         ts = time.time()
@@ -170,9 +217,39 @@ def generate_frames():
                 if accepted:
                     txt = f"Shot detected: {shot['id'][:8]} dur={shot['detection_window']['duration']:.2f}s"
                     cv2.putText(frame, txt, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
+                    if ts - last_accepted_shot_ts >= SHOT_COOLDOWN_SECONDS:
+                        last_accepted_shot_ts = ts
+                        pending_clip = {
+                            'shot_id': shot.get('id', 'unknown'),
+                            'start_ts': ts - CLIP_PRE_SECONDS,
+                            'end_ts': ts + CLIP_POST_SECONDS,
+                            'saved': False,
+                        }
+                    else:
+                        cooldown_left = SHOT_COOLDOWN_SECONDS - (ts - last_accepted_shot_ts)
+                        cooldown_txt = f"Cooldown active: {cooldown_left:.1f}s"
+                        cv2.putText(frame, cooldown_txt, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 180, 255), 2)
                 else:
                     txt = f"Shot ignored (no ball separation)"
                     cv2.putText(frame, txt, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 100, 100), 2)
+
+        frame_buffer.append({'ts': ts, 'frame': frame.copy()})
+        while frame_buffer and frame_buffer[0]['ts'] < ts - FRAME_BUFFER_SECONDS:
+            frame_buffer.popleft()
+
+        if pending_clip and not pending_clip['saved'] and ts >= pending_clip['end_ts']:
+            clip_frames = [
+                f for f in frame_buffer
+                if pending_clip['start_ts'] <= f['ts'] <= pending_clip['end_ts']
+            ]
+            saved_path = _save_clip(clip_frames, pending_clip['shot_id'])
+            if saved_path:
+                print(f"Saved shot clip: {saved_path}")
+            else:
+                print("Failed to save shot clip")
+            pending_clip['saved'] = True
+            pending_clip = None
 
         # Web Stream
         ret, buffer = cv2.imencode('.jpg', frame)
