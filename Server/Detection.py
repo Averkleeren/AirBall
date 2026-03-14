@@ -3,10 +3,12 @@ import mediapipe as mp
 import numpy as np
 import os
 import time
+import json
 from collections import deque
 from datetime import datetime
 from flask import Flask, Response
 from ultralytics import YOLO
+import ollama
 
 from shot_detector import ShotDetector
 from camera import picam2
@@ -33,6 +35,7 @@ CLIP_PRE_SECONDS = 1.5
 CLIP_POST_SECONDS = 1.5
 FRAME_BUFFER_SECONDS = 8.0
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'Shots')
+LLM_MODEL = 'gemma3:1b'
 
 
 def _ensure_output_dir():
@@ -68,6 +71,43 @@ def _save_clip(frames, shot_id):
         writer.write(entry['frame'])
     writer.release()
     return out_path
+
+
+def _print_llm_feedback_for_shot(shot_id):
+    shot_path = os.path.join(OUTPUT_DIR, f'shot_{shot_id}.json')
+    if not os.path.exists(shot_path):
+        print(f"LLM skipped: shot JSON not found at {shot_path}")
+        return
+
+    try:
+        with open(shot_path, 'r', encoding='utf-8') as f:
+            shot_data = json.load(f)
+
+        response = ollama.chat(
+            model=LLM_MODEL,
+            messages=[
+                {
+                    'role': 'system',
+                    'content': 'You are a helpful sports performance coach assistant. Provide clear, concise, and actionable shooting feedback.'
+                },
+                {
+                    'role': 'user',
+                    'content': (
+                        'I collected basketball shot form data. Provide feedback in four sections: '
+                        'overall assessment, strengths, areas for improvement, and top 3 prioritized recommendations. '
+                        'Avoid raw timestamps and precise floating-point values. Keep the tone encouraging and practical. '
+                        f'Data: {json.dumps(shot_data, indent=2)}'
+                    )
+                }
+            ]
+        )
+        feedback = response.get('message', {}).get('content', '').strip()
+        if feedback:
+            print(f"\n=== LLM Feedback for shot {shot_id[:8]} ===\n{feedback}\n")
+        else:
+            print(f"LLM returned empty feedback for shot {shot_id[:8]}")
+    except Exception as exc:
+        print(f"LLM feedback failed for shot {shot_id[:8]}: {exc}")
 
 
 def generate_frames():
@@ -246,6 +286,7 @@ def generate_frames():
             saved_path = _save_clip(clip_frames, pending_clip['shot_id'])
             if saved_path:
                 print(f"Saved shot clip: {saved_path}")
+                _print_llm_feedback_for_shot(pending_clip['shot_id'])
             else:
                 print("Failed to save shot clip")
             pending_clip['saved'] = True
