@@ -4,6 +4,8 @@ import numpy as np
 import os
 import time
 import json
+import queue
+import threading
 from collections import deque
 from datetime import datetime
 from flask import Flask, Response
@@ -36,6 +38,9 @@ CLIP_POST_SECONDS = 1.5
 FRAME_BUFFER_SECONDS = 8.0
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'Shots')
 LLM_MODEL = 'gemma3:1b'
+
+# Run LLM feedback in the background so streaming inference does not block.
+feedback_queue = queue.Queue(maxsize=32)
 
 
 def _ensure_output_dir():
@@ -73,10 +78,22 @@ def _save_clip(frames, shot_id):
     return out_path
 
 
+def _find_shot_json_path(shot_id):
+    candidates = [
+        os.path.join(OUTPUT_DIR, f'shot_{shot_id}.json'),
+        os.path.join('Shots', f'shot_{shot_id}.json'),
+        os.path.join(os.path.dirname(__file__), 'Shots', f'shot_{shot_id}.json'),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return None
+
+
 def _print_llm_feedback_for_shot(shot_id):
-    shot_path = os.path.join(OUTPUT_DIR, f'shot_{shot_id}.json')
-    if not os.path.exists(shot_path):
-        print(f"LLM skipped: shot JSON not found at {shot_path}")
+    shot_path = _find_shot_json_path(shot_id)
+    if not shot_path:
+        print(f"LLM skipped: shot JSON not found for shot {shot_id[:8]}")
         return
 
     try:
@@ -103,11 +120,29 @@ def _print_llm_feedback_for_shot(shot_id):
         )
         feedback = response.get('message', {}).get('content', '').strip()
         if feedback:
+            _ensure_output_dir()
+            feedback_path = os.path.join(OUTPUT_DIR, f'shot_feedback_{shot_id[:8]}.txt')
+            with open(feedback_path, 'w', encoding='utf-8') as f:
+                f.write(feedback)
             print(f"\n=== LLM Feedback for shot {shot_id[:8]} ===\n{feedback}\n")
+            print(f"Feedback saved: {feedback_path}")
         else:
             print(f"LLM returned empty feedback for shot {shot_id[:8]}")
     except Exception as exc:
         print(f"LLM feedback failed for shot {shot_id[:8]}: {exc}")
+
+
+def _feedback_worker_loop():
+    while True:
+        shot_id = feedback_queue.get()
+        try:
+            _print_llm_feedback_for_shot(shot_id)
+        finally:
+            feedback_queue.task_done()
+
+
+feedback_worker = threading.Thread(target=_feedback_worker_loop, daemon=True)
+feedback_worker.start()
 
 
 def generate_frames():
@@ -140,8 +175,8 @@ def generate_frames():
                 cx = int((x1b + x2b) / 2)
                 cy = int((y1b + y2b) / 2)
                 # convert to full frame coords
-                full_cx = int(cx / scale * frame.shape[1])
-                full_cy = int(cy / scale * frame.shape[0])
+                full_cx = int(cx / scale)
+                full_cy = int(cy / scale)
                 ball_center_full = (full_cx, full_cy)
                 ball_buffer.append({'ts': ts, 'pos': ball_center_full})
                 # draw ball detection
@@ -286,7 +321,10 @@ def generate_frames():
             saved_path = _save_clip(clip_frames, pending_clip['shot_id'])
             if saved_path:
                 print(f"Saved shot clip: {saved_path}")
-                _print_llm_feedback_for_shot(pending_clip['shot_id'])
+                try:
+                    feedback_queue.put_nowait(pending_clip['shot_id'])
+                except queue.Full:
+                    print("Feedback queue is full, skipping LLM request for this shot")
             else:
                 print("Failed to save shot clip")
             pending_clip['saved'] = True
