@@ -1,12 +1,19 @@
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .database import engine, Base
 from .routes.auth import router as auth_router
-from . import models
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+
+def _get_cors_origins() -> list[str]:
+    raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+    return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
 
 app = FastAPI(
     title="AirBall API",
@@ -16,7 +23,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Next.js dev server
+    allow_origins=_get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

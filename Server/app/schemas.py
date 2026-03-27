@@ -1,29 +1,50 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Any, Optional
 from datetime import datetime
 
-class UserBase(BaseModel):
+class UserCreate(BaseModel):
     email: EmailStr
     username: str
-
-class UserCreate(UserBase):
     password: str
+    email_redirect_to: Optional[str] = None
 
 class UserLogin(BaseModel):
-    email: str
+    email: EmailStr
     password: str
 
-class UserResponse(UserBase):
-    id: int
-    created_at: datetime
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+    redirect_to: Optional[str] = None
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+    email_redirect_to: Optional[str] = None
+
+class UserResponse(BaseModel):
+    id: str
+    email: Optional[EmailStr] = None
+    username: Optional[str] = None
+    email_confirmed_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    raw_user_meta_data: dict[str, Any] = {}
 
     class Config:
         from_attributes = True
 
+class AuthMessage(BaseModel):
+    message: str
+
+class SignupResponse(AuthMessage):
+    user: UserResponse
+    email_verification_required: bool = True
+
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
+    expires_in: Optional[int] = None
+    expires_at: Optional[int] = None
     user: UserResponse
 
 class TokenData(BaseModel):
