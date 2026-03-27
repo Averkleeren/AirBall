@@ -8,6 +8,7 @@ python-dotenv
 python-jose[cryptography]
 pydantic-settings
 pydantic[email]
+supabase>=2.15.3
 
 # auth / hashing
 passlib==1.7.4
