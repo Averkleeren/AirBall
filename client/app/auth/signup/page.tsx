@@ -10,6 +10,15 @@ import { useState } from "react";
 import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
 import { API_ENDPOINTS, apiCall } from "@/lib/api";
 
+type SignupResponse = {
+  message: string;
+  email_verification_required: boolean;
+  user: {
+    email?: string | null;
+    username?: string | null;
+  };
+};
+
 export default function SignUpPage() {
   const router = useRouter();
 
@@ -34,20 +43,28 @@ export default function SignUpPage() {
     setIsLoading(true);
 
     try {
-      const result = await apiCall(API_ENDPOINTS.signup, {
+      const emailRedirectTo = `${window.location.origin}/auth/login?verified=1`;
+
+      const result = await apiCall<SignupResponse>(API_ENDPOINTS.signup, {
         method: "POST",
         body: JSON.stringify({
           username,
           email,
           password,
+          email_redirect_to: emailRedirectTo,
         }),
       });
 
-      if (!result.ok) {
+      if (!result.ok || !result.data) {
         throw new Error(result.error || "Signup failed. Please try again.");
       }
 
-      router.push("/auth/sign-up-success");
+      const params = new URLSearchParams({
+        email,
+        username,
+      });
+
+      router.push(`/auth/sign-up-success?${params.toString()}`);
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {

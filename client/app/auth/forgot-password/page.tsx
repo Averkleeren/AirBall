@@ -19,10 +19,13 @@ export default function ForgotPasswordPage() {
     setError(null);
     setMessage(null);
 
-    const result = await apiCall(API_ENDPOINTS.forgotPassword, {
-      method: "POST",
-      body: JSON.stringify({ email }),
-    });
+    const result = await apiCall<{ message: string }>(
+      API_ENDPOINTS.forgotPassword,
+      {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      },
+    );
 
     if (!result.ok) {
       setError(result.error || "Failed to send reset email.");
@@ -30,7 +33,10 @@ export default function ForgotPasswordPage() {
       return;
     }
 
-    setMessage("If that email exists, a password reset link has been sent.");
+    setMessage(
+      result.data?.message ||
+        "If that email exists, a password reset link has been sent.",
+    );
     setIsLoading(false);
   };
 

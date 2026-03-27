@@ -5,30 +5,54 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BasketballIcon } from "@/components/basketball-icon";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
 import { API_ENDPOINTS, apiCall } from "@/lib/api";
+import { storeAuthSession } from "@/lib/auth";
+
+type LoginResponse = {
+  access_token: string;
+  refresh_token: string;
+  user: {
+    id: string;
+    email?: string | null;
+    username?: string | null;
+  };
+};
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const initialEmail = searchParams.get("email");
+    const isVerified = searchParams.get("verified") === "1";
+
+    if (initialEmail) {
+      setEmail(initialEmail);
+    }
+
+    if (isVerified) {
+      setInfo("Email verified. You can sign in now.");
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    setInfo(null);
 
     try {
-      const result = await apiCall<{
-        access_token: string;
-        user: unknown;
-      }>(API_ENDPOINTS.login, {
+      const result = await apiCall<LoginResponse>(API_ENDPOINTS.login, {
         method: "POST",
         body: JSON.stringify({
           email,
@@ -40,8 +64,7 @@ export default function LoginPage() {
         throw new Error(result.error || "Login failed. Please try again.");
       }
 
-      localStorage.setItem("access_token", result.data.access_token);
-      localStorage.setItem("user", JSON.stringify(result.data.user));
+      storeAuthSession(result.data);
 
       router.push("/dashboard");
     } catch (error: unknown) {
@@ -87,6 +110,8 @@ export default function LoginPage() {
               />
             </div>
 
+            {info && <p className="text-sm text-green-600">{info}</p>}
+
             <div className="flex flex-col gap-2">
               <Label htmlFor="password">Password</Label>
               <div className="relative">
@@ -115,7 +140,7 @@ export default function LoginPage() {
 
               <div className="text-right">
                 <Link
-                  href="/forgot-password"
+                  href="/auth/forgot-password"
                   className="text-sm text-muted-foreground hover:text-primary hover:underline"
                 >
                   Forgot your password?
