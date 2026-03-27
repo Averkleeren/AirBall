@@ -1,12 +1,20 @@
-export const API_BASE_URL = "http://localhost:8000";
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 export const API_ENDPOINTS = {
   signup: `${API_BASE_URL}/auth/signup`,
   login: `${API_BASE_URL}/auth/login`,
   getCurrentUser: `${API_BASE_URL}/auth/me`,
   forgotPassword: `${API_BASE_URL}/auth/forgot-password`,
+  resendVerification: `${API_BASE_URL}/auth/resend-verification`,
   uploadVideo: `${API_BASE_URL}/upload/video`,
 };
+
+export function buildAuthHeaders(token: string) {
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+}
 
 export async function apiCall<T>(
   url: string,
