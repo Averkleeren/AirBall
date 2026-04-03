@@ -8,6 +8,7 @@ export const API_ENDPOINTS = {
   forgotPassword: `${API_BASE_URL}/auth/forgot-password`,
   resendVerification: `${API_BASE_URL}/auth/resend-verification`,
   uploadVideo: `${API_BASE_URL}/upload/video`,
+  analyzeVideo: `${API_BASE_URL}/analyze/video`,
 };
 
 export function buildAuthHeaders(token: string) {

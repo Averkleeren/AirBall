@@ -1,15 +1,20 @@
 "use client"
 
 import { createClient } from "@/lib/supabase/client"
+import { API_ENDPOINTS } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { useCallback, useRef, useState } from "react"
 import { mutate } from "swr"
 
+type AnalysisStatus = "idle" | "uploading" | "analyzing" | "done"
+
 export function VideoUploader({ userId }: { userId: string }) {
   const [isDragging, setIsDragging] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
+  const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>("idle")
   const [uploadError, setUploadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const isUploading = analysisStatus !== "idle" && analysisStatus !== "done"
 
   const handleUpload = useCallback(
     async (file: File) => {
@@ -23,20 +28,21 @@ export function VideoUploader({ userId }: { userId: string }) {
         return
       }
 
-      setIsUploading(true)
+      setAnalysisStatus("uploading")
       setUploadError(null)
 
       const supabase = createClient()
       const fileExt = file.name.split(".").pop()
       const filePath = `${userId}/${Date.now()}.${fileExt}`
 
+      // 1. Upload video to Supabase Storage
       const { error: storageError } = await supabase.storage
         .from("videos")
         .upload(filePath, file)
 
       if (storageError) {
         setUploadError("Upload failed. Please try again.")
-        setIsUploading(false)
+        setAnalysisStatus("idle")
         return
       }
 
@@ -44,30 +50,82 @@ export function VideoUploader({ userId }: { userId: string }) {
         data: { publicUrl },
       } = supabase.storage.from("videos").getPublicUrl(filePath)
 
-      // Generate random stats (simulating AI analysis)
-      const shotScore = Math.floor(Math.random() * 40) + 60
-      const arcAngle = Math.floor(Math.random() * 20) + 40
-      const releaseSpeed = +(Math.random() * 5 + 18).toFixed(1)
-      const followThroughScore = Math.floor(Math.random() * 30) + 70
+      // 2. Insert a "processing" record so it shows immediately
+      const { data: insertedRow, error: dbError } = await supabase
+        .from("videos")
+        .insert({
+          user_id: userId,
+          file_name: file.name,
+          file_url: publicUrl,
+          status: "processing",
+        })
+        .select("id")
+        .single()
 
-      const { error: dbError } = await supabase.from("videos").insert({
-        user_id: userId,
-        file_name: file.name,
-        file_url: publicUrl,
-        status: "analyzed",
-        shot_score: shotScore,
-        arc_angle: arcAngle,
-        release_speed: releaseSpeed,
-        follow_through_score: followThroughScore,
-      })
-
-      if (dbError) {
-        setUploadError("Failed to save analysis. Please try again.")
-        setIsUploading(false)
+      if (dbError || !insertedRow) {
+        setUploadError("Failed to save video record. Please try again.")
+        setAnalysisStatus("idle")
         return
       }
 
-      setIsUploading(false)
+      mutate("videos")
+
+      // 3. Send video to backend for real AI analysis
+      setAnalysisStatus("analyzing")
+
+      try {
+        const formData = new FormData()
+        formData.append("file", file)
+
+        const res = await fetch(API_ENDPOINTS.analyzeVideo, {
+          method: "POST",
+          body: formData,
+        })
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: "Analysis failed" }))
+          throw new Error(err.detail || "Analysis failed")
+        }
+
+        const analysis = await res.json()
+
+        // 4. Update the DB record with real results
+        if (analysis.status === "analyzed") {
+          await supabase
+            .from("videos")
+            .update({
+              status: "analyzed",
+              shot_score: analysis.shot_score,
+              arc_angle: analysis.arc_angle,
+              release_speed: analysis.release_speed,
+              follow_through_score: analysis.follow_through_score,
+              llm_feedback: analysis.llm_feedback,
+              shot_data: analysis.shot_data,
+            })
+            .eq("id", insertedRow.id)
+        } else {
+          // No shots detected
+          await supabase
+            .from("videos")
+            .update({
+              status: "analyzed",
+              llm_feedback: analysis.message || "No shots detected in this video.",
+            })
+            .eq("id", insertedRow.id)
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Analysis failed"
+        await supabase
+          .from("videos")
+          .update({
+            status: "error",
+            llm_feedback: `Analysis error: ${message}`,
+          })
+          .eq("id", insertedRow.id)
+        setUploadError(message)
+      }
+
+      setAnalysisStatus("idle")
       mutate("videos")
     },
     [userId]
@@ -125,7 +183,8 @@ export function VideoUploader({ userId }: { userId: string }) {
 
         {isUploading ? (
           <p className="text-sm font-medium text-foreground">
-            Uploading & analyzing...
+            {analysisStatus === "uploading" && "Uploading video..."}
+            {analysisStatus === "analyzing" && "Analyzing your shot with AI... This may take a moment."}
           </p>
         ) : (
           <>

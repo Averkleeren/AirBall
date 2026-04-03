@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routes.auth import router as auth_router
+from .routes.analysis import router as analysis_router
 
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -31,6 +32,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(analysis_router)
 
 @app.get("/health")
 def health_check():

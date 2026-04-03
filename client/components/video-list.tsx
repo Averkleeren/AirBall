@@ -12,6 +12,7 @@ interface Video {
   arc_angle: number | null
   release_speed: number | null
   follow_through_score: number | null
+  llm_feedback: string | null
   created_at: string
 }
 
@@ -101,10 +102,27 @@ export function VideoList() {
 
             {video.status === "processing" && (
               <span className="inline-flex items-center rounded-md bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
-                Processing...
+                Analyzing...
+              </span>
+            )}
+
+            {video.status === "error" && (
+              <span className="inline-flex items-center rounded-md bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive">
+                Analysis failed
               </span>
             )}
           </div>
+
+          {video.llm_feedback && (
+            <div className="mt-4 rounded-lg border border-border bg-muted/50 p-4">
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                AI Coaching Feedback
+              </h4>
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-card-foreground">
+                {video.llm_feedback}
+              </div>
+            </div>
+          )}
         </div>
       ))}
     </div>
