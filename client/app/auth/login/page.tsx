@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
-import { API_ENDPOINTS, apiCall } from "@/lib/api";
+import { createClient } from "@/lib/supabase/client";
 import { storeAuthSession } from "@/lib/auth";
 
 type LoginResponse = {
@@ -52,19 +52,25 @@ export default function LoginPage() {
     setInfo(null);
 
     try {
-      const result = await apiCall<LoginResponse>(API_ENDPOINTS.login, {
-        method: "POST",
-        body: JSON.stringify({
-          email,
-          password,
-        }),
+      const supabase = createClient();
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
-      if (!result.ok || !result.data) {
-        throw new Error(result.error || "Login failed. Please try again.");
+      if (authError || !data.session || !data.user) {
+        throw new Error(authError?.message || "Login failed. Please try again.");
       }
 
-      storeAuthSession(result.data);
+      storeAuthSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        user: {
+          id: data.user.id,
+          email: data.user.email,
+          username: data.user.user_metadata?.username || data.user.user_metadata?.full_name,
+        },
+      });
 
       router.push("/dashboard");
     } catch (error: unknown) {
