@@ -18,13 +18,13 @@ class ShotDetector:
         self.min_landmark_visibility = 0.55
 
         # landmarks indices
-        self.RW = mp.solutions.pose.PoseLandmark.RIGHT_WRIST.value
-        self.LW = mp.solutions.pose.PoseLandmark.LEFT_WRIST.value
-        self.RE = mp.solutions.pose.PoseLandmark.RIGHT_ELBOW.value
-        self.LE = mp.solutions.pose.PoseLandmark.LEFT_ELBOW.value
-        self.RS = mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER.value
-        self.LS = mp.solutions.pose.PoseLandmark.LEFT_SHOULDER.value
-        self.MID_HIP = mp.solutions.pose.PoseLandmark.LEFT_HIP.value
+        self.RW = mp.tasks.vision.PoseLandmark.RIGHT_WRIST.value
+        self.LW = mp.tasks.vision.PoseLandmark.LEFT_WRIST.value
+        self.RE = mp.tasks.vision.PoseLandmark.RIGHT_ELBOW.value
+        self.LE = mp.tasks.vision.PoseLandmark.LEFT_ELBOW.value
+        self.RS = mp.tasks.vision.PoseLandmark.RIGHT_SHOULDER.value
+        self.LS = mp.tasks.vision.PoseLandmark.LEFT_SHOULDER.value
+        self.MID_HIP = mp.tasks.vision.PoseLandmark.LEFT_HIP.value
 
     def _visibility(self, entry, idx):
         try:
@@ -61,10 +61,10 @@ class ShotDetector:
         # compute normalization scale from shoulders and torso
         # pix is list of (x,y,z,vis)
         try:
-            ls = pix[mp.solutions.pose.PoseLandmark.LEFT_SHOULDER.value]
-            rs = pix[mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER.value]
-            lh = pix[mp.solutions.pose.PoseLandmark.LEFT_HIP.value]
-            rh = pix[mp.solutions.pose.PoseLandmark.RIGHT_HIP.value]
+            ls = pix[mp.tasks.vision.PoseLandmark.LEFT_SHOULDER.value]
+            rs = pix[mp.tasks.vision.PoseLandmark.RIGHT_SHOULDER.value]
+            lh = pix[mp.tasks.vision.PoseLandmark.LEFT_HIP.value]
+            rh = pix[mp.tasks.vision.PoseLandmark.RIGHT_HIP.value]
             shoulder_width = self._dist((ls[0], ls[1]), (rs[0], rs[1]))
             torso_len_l = self._dist((ls[0], ls[1]), (lh[0], lh[1]))
             torso_len_r = self._dist((rs[0], rs[1]), (rh[0], rh[1]))
@@ -105,9 +105,9 @@ class ShotDetector:
         wrist_idx = self.RW if side == 'right' else self.LW
         elbow_idx = self.RE if side == 'right' else self.LE
         shoulder_idx = self.RS if side == 'right' else self.LS
-        knee_idx = mp.solutions.pose.PoseLandmark.RIGHT_KNEE.value if side == 'right' else mp.solutions.pose.PoseLandmark.LEFT_KNEE.value
-        ankle_idx = mp.solutions.pose.PoseLandmark.RIGHT_ANKLE.value if side == 'right' else mp.solutions.pose.PoseLandmark.LEFT_ANKLE.value
-        hip_idx = mp.solutions.pose.PoseLandmark.RIGHT_HIP.value if side == 'right' else mp.solutions.pose.PoseLandmark.LEFT_HIP.value
+        knee_idx = mp.tasks.vision.PoseLandmark.RIGHT_KNEE.value if side == 'right' else mp.tasks.vision.PoseLandmark.LEFT_KNEE.value
+        ankle_idx = mp.tasks.vision.PoseLandmark.RIGHT_ANKLE.value if side == 'right' else mp.tasks.vision.PoseLandmark.LEFT_ANKLE.value
+        hip_idx = mp.tasks.vision.PoseLandmark.RIGHT_HIP.value if side == 'right' else mp.tasks.vision.PoseLandmark.LEFT_HIP.value
 
         upper_indices = [wrist_idx, elbow_idx, shoulder_idx]
         lower_indices = [hip_idx, knee_idx, ankle_idx]
@@ -230,7 +230,7 @@ class ShotDetector:
         wrist_vis_ratio = float(np.mean([1.0 if v >= self.min_landmark_visibility else 0.0 for v in wrist_vis])) if wrist_vis else 0.0
         knee_vis_ratio = float(np.mean([1.0 if v >= self.min_landmark_visibility else 0.0 for v in knee_vis])) if knee_vis else 0.0
 
-        nose_idx = mp.solutions.pose.PoseLandmark.NOSE.value
+        nose_idx = mp.tasks.vision.PoseLandmark.NOSE.value
 
         for f in frames:
             pix = f['pix']

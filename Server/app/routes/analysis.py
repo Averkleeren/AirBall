@@ -2,13 +2,13 @@ import json
 import os
 import sys
 import tempfile
-import time
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
 import ollama
+import mediapipe as mp
 from fastapi import APIRouter, HTTPException, UploadFile, File, status
-from mediapipe.python.solutions import pose as mp_pose
 
 # Allow importing shot_detector from the Server root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -18,9 +18,28 @@ router = APIRouter(prefix="/analyze", tags=["analysis"])
 
 LLM_MODEL = "gemma3:1b"
 
+# Path to the PoseLandmarker model file
+_MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "pose_landmarker_lite.task")
+
+
+@dataclass
+class _FakeLandmark:
+    """Mimic the old mp.solutions.pose landmark interface for ShotDetector compatibility."""
+    x: float
+    y: float
+    z: float
+    visibility: float
+
 
 def _process_video(file_path: str) -> list[dict]:
-    """Run MediaPipe pose detection + ShotDetector on every frame of a video file."""
+    """Run MediaPipe PoseLandmarker + ShotDetector on every frame of a video file."""
+    model_path = os.path.abspath(_MODEL_PATH)
+    if not os.path.exists(model_path):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Pose model not found at {model_path}. Download pose_landmarker_lite.task.",
+        )
+
     cap = cv2.VideoCapture(file_path)
     if not cap.isOpened():
         raise HTTPException(
@@ -32,13 +51,16 @@ def _process_video(file_path: str) -> list[dict]:
     frame_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    detector = ShotDetector()
-    pose = mp_pose.Pose(
-        static_image_mode=False,
-        min_detection_confidence=0.3,
-        model_complexity=0,
+    # Create PoseLandmarker using Tasks API
+    options = mp.tasks.vision.PoseLandmarkerOptions(
+        base_options=mp.tasks.BaseOptions(model_asset_path=model_path),
+        running_mode=mp.tasks.vision.RunningMode.VIDEO,
+        num_poses=1,
+        min_pose_detection_confidence=0.3,
     )
+    landmarker = mp.tasks.vision.PoseLandmarker.create_from_options(options)
 
+    detector = ShotDetector()
     shots: list[dict] = []
     frame_idx = 0
 
@@ -48,11 +70,25 @@ def _process_video(file_path: str) -> list[dict]:
             break
 
         ts = frame_idx / fps
+        timestamp_ms = int(frame_idx * 1000 / fps)
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(rgb)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
-        if results.pose_landmarks:
-            landmarks = results.pose_landmarks.landmark
+        result = landmarker.detect_for_video(mp_image, timestamp_ms)
+
+        if result.pose_landmarks and len(result.pose_landmarks) > 0:
+            raw_landmarks = result.pose_landmarks[0]
+            # Convert NormalizedLandmark to objects with .x, .y, .z, .visibility
+            landmarks = [
+                _FakeLandmark(
+                    x=lm.x,
+                    y=lm.y,
+                    z=lm.z,
+                    visibility=lm.visibility if lm.visibility is not None else 0.0,
+                )
+                for lm in raw_landmarks
+            ]
+
             shot = detector.update(landmarks, frame_w, frame_h, ts)
             if shot is not None:
                 shots.append(shot)
@@ -60,7 +96,7 @@ def _process_video(file_path: str) -> list[dict]:
         frame_idx += 1
 
     cap.release()
-    pose.close()
+    landmarker.close()
     return shots
 
 
@@ -95,29 +131,134 @@ def _derive_scores(shot: dict) -> dict:
     }
 
 
+def _build_shot_summary(shot: dict) -> str:
+    """Convert raw shot data into a human-readable summary the LLM can reason about."""
+    lines = []
+
+    # Data quality context
+    quality = shot.get("data_quality", {})
+    confidence = quality.get("confidence", "unknown")
+    occlusion = quality.get("occlusion_flags", {})
+    lines.append(f"Tracking confidence: {confidence}")
+    if occlusion.get("lower_body_occluded"):
+        lines.append("Lower body was not fully visible — no leg drive or knee data available.")
+    if occlusion.get("upper_body_occluded"):
+        lines.append("Upper body was partially occluded.")
+
+    # Elbow mechanics
+    elbow = shot.get("metrics", {}).get("angles", {}).get("elbow", {})
+    set_deg = elbow.get("at_set_deg")
+    release_deg = elbow.get("at_release_deg")
+    if set_deg is not None:
+        if set_deg < 70:
+            lines.append("Elbow is very bent at the set point — arm is compact")
+        elif set_deg < 100:
+            lines.append("Elbow is moderately bent at the set point")
+        else:
+            lines.append("Elbow is fairly open at the set point")
+    if release_deg is not None:
+        if release_deg < 140:
+            lines.append("Elbow did not fully extend at release — arm is still too bent when letting go of the ball")
+        elif release_deg < 160:
+            lines.append("Elbow extension at release is decent but could be straighter")
+        else:
+            lines.append("Good full elbow extension at release")
+
+    # Knee mechanics (if available)
+    knee = shot.get("metrics", {}).get("angles", {}).get("knee", {})
+    knee_load = knee.get("min_during_load_deg")
+    if knee_load is not None:
+        if knee_load < 120:
+            lines.append("Good deep knee bend during the load phase — getting power from the legs")
+        elif knee_load < 150:
+            lines.append("Moderate knee bend during load — could bend a bit more for extra power")
+        else:
+            lines.append("Barely any knee bend during load — not using legs enough")
+
+    # Release point
+    release = shot.get("metrics", {}).get("release", {})
+    above_head = release.get("wrist_above_head_norm")
+    if above_head is not None:
+        if above_head > 0:
+            lines.append("Release point is BELOW the head — should aim to release above the head")
+        else:
+            lines.append("Release point is above the head — good release height")
+
+    # Follow-through
+    ft = shot.get("metrics", {}).get("follow_through", {})
+    hold = ft.get("hold_duration_s")
+    if hold is not None:
+        if hold < 0.05:
+            lines.append("No follow-through hold detected — hand dropped immediately after release")
+        elif hold < 0.15:
+            lines.append("Very short follow-through — hand drops too quickly after release")
+        else:
+            lines.append("Good follow-through hold — hand stays up after release")
+
+    # Timing / leg drive
+    timing = shot.get("timing", {})
+    leg_drive = timing.get("leg_drive_before_arm_extension")
+    if leg_drive is True:
+        lines.append("Good sequencing: legs drive before arm extension")
+    elif leg_drive is False:
+        lines.append("Arm extended before legs — should initiate shot from the legs up")
+
+    # Wrist snap
+    wrist_snap = shot.get("phases", {}).get("wrist_snap", {})
+    snap_vel = wrist_snap.get("angular_velocity_rad_s")
+    if snap_vel is not None:
+        if snap_vel > 100:
+            lines.append("Strong wrist snap at release")
+        elif snap_vel > 30:
+            lines.append("Moderate wrist snap at release")
+        else:
+            lines.append("Weak wrist snap — needs more flick of the wrist at release")
+
+    # Stability
+    stability = shot.get("metrics", {}).get("stability", {})
+    head_var = stability.get("head_vertical_variance_norm")
+    if head_var is not None:
+        if head_var < 0.002:
+            lines.append("Head stays steady during the shot — good balance")
+        else:
+            lines.append("Noticeable head movement during the shot — work on balance")
+
+    # Guardrails
+    guardrails = shot.get("feedback_guardrails", {})
+    mode = guardrails.get("mode", "normal")
+    if mode == "conservative":
+        lines.append("NOTE: Limited visibility means some metrics are missing. Feedback focuses on what was observable.")
+
+    return "\n".join(lines)
+
+
 def _generate_feedback(shot_data: dict) -> str:
     """Call local Ollama LLM to generate coaching feedback from shot data."""
+    shot_summary = _build_shot_summary(shot_data)
+
+    prompt = f"""You are a basketball shooting coach. A player filmed their shot and motion tracking analyzed it.
+
+Here is what the analysis found:
+{shot_summary}
+
+Write short coaching feedback for this player. Use the second person ("you" / "your"). Follow this exact structure:
+
+OVERALL: Write one sentence about the shot overall.
+
+STRENGTHS:
+- Write one thing the player did well.
+- Write another thing the player did well.
+
+WORK ON:
+- Write one thing to improve and include a specific drill to fix it.
+- Write another thing to improve and include a specific drill to fix it.
+
+Important: Start directly with "OVERALL:" — no introduction or preamble. Do not include numbers or data. Do not ask questions. Keep each bullet to one or two sentences. Sound like a real basketball coach giving encouragement after practice."""
+
     try:
         response = ollama.chat(
             model=LLM_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a helpful sports performance coach assistant. "
-                        "Provide clear, concise, and actionable shooting feedback."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        "I collected basketball shot form data. Provide feedback in four sections: "
-                        "overall assessment, strengths, areas for improvement, and top 3 prioritized recommendations. "
-                        "Avoid raw timestamps and precise floating-point values. Keep the tone encouraging and practical. "
-                        f"Data: {json.dumps(shot_data, indent=2)}"
-                    ),
-                },
-            ],
+            messages=[{"role": "user", "content": prompt}],
         )
         return response.get("message", {}).get("content", "").strip()
     except Exception as exc:
