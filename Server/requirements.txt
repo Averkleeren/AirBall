@@ -1,6 +1,12 @@
-fastapi 
+fastapi
 uvicorn
 ollama
+python-multipart
+mediapipe==0.10.32
+opencv-python-headless
+numpy==1.26.4
+jax==0.4.17
+jaxlib==0.4.17
 pytest
 sqlalchemy
 pydantic
