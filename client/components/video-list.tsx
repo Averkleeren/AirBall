@@ -44,7 +44,7 @@ export function VideoList() {
 
   if (isLoading) {
     return (
-      <div className="py-12 text-center text-sm text-muted-foreground">
+      <div className="rounded-xl border border-border bg-card px-6 py-12 text-center text-sm text-muted-foreground">
         Loading your shots...
       </div>
     )
@@ -52,7 +52,7 @@ export function VideoList() {
 
   if (error) {
     return (
-      <div className="py-12 text-center text-sm text-destructive">
+      <div className="rounded-xl border border-border bg-card px-6 py-12 text-center text-sm text-destructive">
         Failed to load videos. Please refresh the page.
       </div>
     )
@@ -60,9 +60,9 @@ export function VideoList() {
 
   if (!videos || videos.length === 0) {
     return (
-      <div className="py-12 text-center">
+      <div className="rounded-xl border border-border bg-card px-6 py-12 text-center">
         <p className="text-sm text-muted-foreground">
-          No videos yet. Upload your first shot to get started.
+          No shots yet. Upload your first video to get started.
         </p>
       </div>
     )
