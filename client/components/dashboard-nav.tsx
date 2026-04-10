@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import { createClient } from "@/lib/supabase/client"
-import { BasketballIcon } from "@/components/basketball-icon"
-import { Button } from "@/components/ui/button"
+import { createClient } from "@/lib/supabase/client";
+import { BasketballIcon } from "@/components/basketball-icon";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,25 +10,25 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import Link from "next/link"
-import { useRouter, usePathname } from "next/navigation"
-import { LogOut, User, Upload, LayoutDashboard } from "lucide-react"
+} from "@/components/ui/dropdown-menu";
+import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
+import { LogOut, User, Upload, LayoutDashboard } from "lucide-react";
 
 export function DashboardNav({ userEmail: email }: { userEmail: string }) {
-  const router = useRouter()
-  const pathname = usePathname()
+  const router = useRouter();
+  const pathname = usePathname();
 
   const handleSignOut = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push("/")
-  }
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/");
+  };
 
   const navLinks = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dashboard/upload", label: "Upload", icon: Upload },
-  ]
+  ];
 
   return (
     <nav className="border-b border-border bg-background">
@@ -43,7 +43,7 @@ export function DashboardNav({ userEmail: email }: { userEmail: string }) {
 
           <div className="hidden items-center gap-1 sm:flex">
             {navLinks.map((link) => {
-              const isActive = pathname === link.href
+              const isActive = pathname === link.href;
               return (
                 <Link key={link.href} href={link.href}>
                   <Button
@@ -59,7 +59,7 @@ export function DashboardNav({ userEmail: email }: { userEmail: string }) {
                     {link.label}
                   </Button>
                 </Link>
-              )
+              );
             })}
           </div>
         </div>
@@ -96,5 +96,5 @@ export function DashboardNav({ userEmail: email }: { userEmail: string }) {
         </DropdownMenu>
       </div>
     </nav>
-  )
+  );
 }

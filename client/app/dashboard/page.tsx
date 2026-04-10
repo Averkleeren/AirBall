@@ -1,24 +1,24 @@
-import { createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
-import { DashboardNav } from "@/components/dashboard-nav"
-import { VideoUploader } from "@/components/video-uploader"
-import { VideoList } from "@/components/video-list"
-import { DashboardStats } from "@/components/dashboard-stats"
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { DashboardNav } from "@/components/dashboard-nav";
+import { VideoUploader } from "@/components/video-uploader";
+import { VideoList } from "@/components/video-list";
+import { DashboardStats } from "@/components/dashboard-stats";
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
+  const supabase = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login")
+    redirect("/auth/login");
   }
 
   const firstName =
     user.user_metadata?.full_name?.split(" ")[0] ??
     user.email?.split("@")[0] ??
-    "there"
+    "there";
 
   return (
     <div className="min-h-screen bg-background">
@@ -54,5 +54,5 @@ export default async function DashboardPage() {
         </div>
       </main>
     </div>
-  )
+  );
 }

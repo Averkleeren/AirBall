@@ -1,40 +1,40 @@
-"use client"
+"use client";
 
-import { createClient } from "@/lib/supabase/client"
-import useSWR from "swr"
-import { Video, TrendingUp, Target } from "lucide-react"
+import { createClient } from "@/lib/supabase/client";
+import useSWR from "swr";
+import { Video, TrendingUp, Target } from "lucide-react";
 
 interface VideoRow {
-  status: string
-  shot_score: number | null
+  status: string;
+  shot_score: number | null;
 }
 
 async function fetchStats() {
-  const supabase = createClient()
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("videos")
-    .select("status, shot_score")
+    .select("status, shot_score");
 
-  if (error) throw error
-  return data ?? []
+  if (error) throw error;
+  return data ?? [];
 }
 
 export function DashboardStats() {
-  const { data: videos } = useSWR<VideoRow[]>("video-stats", fetchStats)
+  const { data: videos } = useSWR<VideoRow[]>("video-stats", fetchStats);
 
-  const totalVideos = videos?.length ?? 0
-  const analyzed = videos?.filter((v) => v.status === "analyzed") ?? []
+  const totalVideos = videos?.length ?? 0;
+  const analyzed = videos?.filter((v) => v.status === "analyzed") ?? [];
   const avgScore =
     analyzed.length > 0
       ? Math.round(
           analyzed.reduce((sum, v) => sum + (v.shot_score ?? 0), 0) /
-            analyzed.filter((v) => v.shot_score !== null).length
+            analyzed.filter((v) => v.shot_score !== null).length,
         ) || 0
-      : 0
+      : 0;
   const bestScore =
     analyzed.length > 0
       ? Math.max(...analyzed.map((v) => v.shot_score ?? 0))
-      : 0
+      : 0;
 
   const stats = [
     {
@@ -52,7 +52,7 @@ export function DashboardStats() {
       value: bestScore || "—",
       icon: Target,
     },
-  ]
+  ];
 
   return (
     <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -73,5 +73,5 @@ export function DashboardStats() {
         </div>
       ))}
     </div>
-  )
+  );
 }
