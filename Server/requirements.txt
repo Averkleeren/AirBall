@@ -4,9 +4,9 @@ ollama
 python-multipart
 mediapipe==0.10.32
 opencv-python-headless
-numpy==1.26.4
-jax==0.4.17
-jaxlib==0.4.17
+numpy
+jax
+jaxlib
 pytest
 sqlalchemy
 pydantic
@@ -14,7 +14,7 @@ python-dotenv
 python-jose[cryptography]
 pydantic-settings
 pydantic[email]
-supabase>=2.15.3
+supabase
 
 # auth / hashing
 passlib==1.7.4
