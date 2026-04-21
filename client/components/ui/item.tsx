@@ -4,17 +4,6 @@ import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
 
-function ItemGroup({ className, ...props }: React.ComponentProps<'div'>) {
-  return (
-    <div
-      role="list"
-      data-slot="item-group"
-      className={cn('group/item-group flex flex-col', className)}
-      {...props}
-    />
-  )
-}
-
 const itemVariants = cva(
   'group/item flex items-center border border-transparent text-sm rounded-md transition-colors [a&]:hover:bg-accent/50 [a&]:transition-colors duration-100 flex-wrap outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
   {
@@ -101,77 +90,10 @@ function ItemContent({ className, ...props }: React.ComponentProps<'div'>) {
   )
 }
 
-function ItemTitle({ className, ...props }: React.ComponentProps<'div'>) {
-  return (
-    <div
-      data-slot="item-title"
-      className={cn(
-        'flex w-fit items-center gap-2 text-sm leading-snug font-medium',
-        className,
-      )}
-      {...props}
-    />
-  )
-}
-
-function ItemDescription({ className, ...props }: React.ComponentProps<'p'>) {
-  return (
-    <p
-      data-slot="item-description"
-      className={cn(
-        'text-muted-foreground line-clamp-2 text-sm leading-normal font-normal text-balance',
-        '[&>a:hover]:text-primary [&>a]:underline [&>a]:underline-offset-4',
-        className,
-      )}
-      {...props}
-    />
-  )
-}
-
-function ItemActions({ className, ...props }: React.ComponentProps<'div'>) {
-  return (
-    <div
-      data-slot="item-actions"
-      className={cn('flex items-center gap-2', className)}
-      {...props}
-    />
-  )
-}
-
-function ItemHeader({ className, ...props }: React.ComponentProps<'div'>) {
-  return (
-    <div
-      data-slot="item-header"
-      className={cn(
-        'flex basis-full items-center justify-between gap-2',
-        className,
-      )}
-      {...props}
-    />
-  )
-}
-
-function ItemFooter({ className, ...props }: React.ComponentProps<'div'>) {
-  return (
-    <div
-      data-slot="item-footer"
-      className={cn(
-        'flex basis-full items-center justify-between gap-2',
-        className,
-      )}
-      {...props}
-    />
-  )
-}
 
 export {
   Item,
   ItemMedia,
   ItemContent,
-  ItemActions,
-  ItemGroup,
-  ItemTitle,
-  ItemDescription,
-  ItemHeader,
-  ItemFooter,
+
 }
