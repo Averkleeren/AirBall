@@ -144,6 +144,42 @@ function ItemDescription({ className, ...props }: React.ComponentProps<'p'>) {
   )
 }
 
+function ItemActions({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="item-actions"
+      className={cn('flex items-center gap-2', className)}
+      {...props}
+    />
+  )
+}
+
+function ItemHeader({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="item-header"
+      className={cn(
+        'flex basis-full items-center justify-between gap-2',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+function ItemFooter({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="item-footer"
+      className={cn(
+        'flex basis-full items-center justify-between gap-2',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
 export {
   Item,
   ItemGroup,
@@ -152,4 +188,7 @@ export {
   ItemContent,
   ItemTitle,
   ItemDescription,
+  ItemActions,
+  ItemHeader,
+  ItemFooter,
 }
