@@ -3,6 +3,33 @@ import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
+import { Separator } from '@/components/ui/separator'
+
+
+function ItemGroup({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      role="list"
+      data-slot="item-group"
+      className={cn('group/item-group flex flex-col', className)}
+      {...props}
+    />
+  )
+}
+
+function ItemSeparator({
+  className,
+  ...props
+}: React.ComponentProps<typeof Separator>) {
+  return (
+    <Separator
+      data-slot="item-separator"
+      orientation="horizontal"
+      className={cn('my-0', className)}
+      {...props}
+    />
+  )
+}
 
 const itemVariants = cva(
   'group/item flex items-center border border-transparent text-sm rounded-md transition-colors [a&]:hover:bg-accent/50 [a&]:transition-colors duration-100 flex-wrap outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
@@ -92,6 +119,8 @@ function ItemContent({ className, ...props }: React.ComponentProps<'div'>) {
 
 export {
   Item,
+  ItemGroup,
+  ItemSeparator,
   ItemMedia,
   ItemContent,
 }
