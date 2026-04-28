@@ -1,3 +1,27 @@
+export {
+  SidebarProvider,
+  SidebarTrigger,
+  SidebarRail,
+  SidebarInset,
+  SidebarHeader,
+  SidebarFooter,
+  SidebarSeparator,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupAction,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarMenuAction,
+  SidebarMenuBadge,
+  SidebarMenuSkeleton,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
+  useSidebar,
+}
 import { Skeleton } from "@/components/ui/skeleton"
 
 function SidebarMenuSkeleton({
